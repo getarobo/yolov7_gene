@@ -60,6 +60,15 @@ def detect(opt):
     else:
         dataset = LoadImages(source, img_size=imgsz, stride=stride)
 
+    ##################################### MINE START
+
+    frame_count = 0  # To count total frames.
+    total_fps = 0  # To get the final frames per second.
+
+    ##################################### MINE END
+
+
+
     # Run inference
     if device.type != 'cpu':
         model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
@@ -72,6 +81,7 @@ def detect(opt):
             img = img.unsqueeze(0)
 
         # Inference
+        start_time = time.time()
         t1 = time_synchronized()
         pred = model(img, augment=opt.augment)[0]
         print(pred[...,4].max())
@@ -80,11 +90,16 @@ def detect(opt):
         t2 = time_synchronized()
 
         # Apply Classifier
+
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
-
+        end_time = time.time()
         # Process detections
         for i, det in enumerate(pred):  # detections per image
+
+            # Get the start time.
+
+
             if webcam:  # batch_size >= 1
                 p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset.count
             else:
@@ -104,6 +119,7 @@ def detect(opt):
                 for c in det[:, 5].unique():
                     n = (det[:, 5] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                # Get the end time.
 
                 # Write results
                 for det_index, (*xyxy, conf, cls) in enumerate(reversed(det[:,:6])):
@@ -132,6 +148,20 @@ def detect(opt):
             # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
 
+
+            # Get the fps.
+            fps = 1 / (end_time - start_time)
+            # Add fps to total fps.
+            total_fps += fps
+            # Increment frame count.
+            frame_count += 1
+            avg_fps = total_fps / frame_count
+            # write fps
+
+            print(f"\n fps: {fps} avg_fps: {avg_fps} body#: {len(det)}")
+            cv2.putText(im0, f"DETECTION - FPS: {fps:.3f}, AVG_FPS: {avg_fps:.3f} body#: {len(det)}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+
             # Stream results
             if view_img:
                 cv2.imshow(str(p), im0)
@@ -155,6 +185,9 @@ def detect(opt):
                             save_path += '.mp4'
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
+
+    avg_fps = total_fps / frame_count
+    print(f"Average FPS: {avg_fps:.3f}")
 
     if save_txt or save_txt_tidl or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt or save_txt_tidl else ''
